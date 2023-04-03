@@ -1,3 +1,39 @@
+//Project state management (singleton class for managing projects)
+class ProjectState {
+  private listeners: any[] = [];
+  private projects: any[] = [];
+  private static instance: ProjectState;
+
+  private constructor() {}
+
+  static getInstance() {
+    if (this.instance) {
+      return this.instance;
+    }
+    this.instance = new ProjectState();
+    return this.instance;
+  }
+
+  addListener(listenerFn: Function) {
+    this.listeners.push(listenerFn);
+  }
+
+  addProject(title: string, description: string, numOfPeople: number) {
+    const newProject = {
+      id: Math.random().toString(),
+      title: title,
+      description: description,
+      people: numOfPeople,
+    };
+    this.projects.push(newProject);
+    for (const listenerFn of this.listeners) {
+      listenerFn(this.projects.slice());
+    }
+  }
+}
+
+const projectState = ProjectState.getInstance();
+
 //Validation
 interface Validatable {
   value: string | number;
@@ -8,6 +44,7 @@ interface Validatable {
   max?: number;
 }
 
+//Validation function (checks if input is valid)
 function validate(validatableInput: Validatable) {
   let isValid = true;
   if (validatableInput.required) {
@@ -28,7 +65,7 @@ function validate(validatableInput: Validatable) {
   return isValid;
 }
 
-//auto bind decorator
+//auto bind decorator (binds this to the class)
 function autoBind(_: any, _2: string, descriptor: PropertyDescriptor) {
   const originalMethod = descriptor.value;
   const adjDescriptor: PropertyDescriptor = {
@@ -41,13 +78,13 @@ function autoBind(_: any, _2: string, descriptor: PropertyDescriptor) {
   return adjDescriptor;
 }
 
-// ProjectList Class
+// ProjectList Class (output class for projects)
 class ProjectList {
   templateElement: HTMLTemplateElement;
   hostElement: HTMLDivElement;
   element: HTMLElement;
   assignedProjects: any[];
-
+  // constructor method (takes the type of the project list (active or finished))
   constructor(private type: 'active' | 'finished') {
     this.templateElement = document.getElementById('project-list')! as HTMLTemplateElement;
     this.hostElement = document.getElementById('app')! as HTMLDivElement;
@@ -56,21 +93,38 @@ class ProjectList {
     const importedNode = document.importNode(this.templateElement.content, true);
     this.element = importedNode.firstElementChild as HTMLElement;
     this.element.id = `${this.type}-projects`;
+
+    // add listener method (adds a listener to the projectState)
+    projectState.addListener((projects: any[]) => {
+      this.assignedProjects = projects;
+      this.renderProjects();
+    });
+
     this.attach();
     this.renderContent();
   }
 
+  // render projects method (renders projects to the DOM)
+  private renderProjects() {
+    const listEl = document.getElementById(`${this.type}-project-list`)! as HTMLUListElement;
+    for (const prjItem of this.assignedProjects) {
+      const listItem = document.createElement('li');
+      listItem.textContent = prjItem.title;
+      listEl.appendChild(listItem);
+    }
+  }
+  // render content method (renders content to the DOM)
   private renderContent() {
     const listId = `${this.type}-project-list`;
     this.element.querySelector('ul')!.id = listId;
     this.element.querySelector('h2')!.textContent = this.type.toUpperCase() + ' PROJECTS';
   }
-
+  // attach method (attaches the element to the host element)
   private attach() {
     this.hostElement.insertAdjacentElement('beforeend', this.element);
   }
 }
-// ProjectInput Class
+// ProjectInput Class (input class for projects )
 class ProjectInput {
   templateElement: HTMLTemplateElement;
   hostElement: HTMLDivElement;
@@ -96,6 +150,7 @@ class ProjectInput {
     this.attach();
   }
 
+  // configure method (configures the form)
   private gatherUserInput(): [string, string, number] | void {
     const enteredTitle = this.titleInputElement.value;
     const enteredDescription = this.descriptionInputElement.value;
@@ -117,6 +172,7 @@ class ProjectInput {
       max: 5,
     };
 
+    // validate method (validates the form)
     if (!validate(titleValidatable) || !validate(descriptionValidatable) || !validate(peopleValidatable)) {
       alert('Invalid input, please try again!');
       let err = new Error('Invalid input, please try again!');
@@ -132,6 +188,7 @@ class ProjectInput {
     this.peopleInputElement.value = '';
   }
 
+  // submit handler method (handles the submit event)
   @autoBind
   private submitHandler(event: Event) {
     event.preventDefault();
@@ -139,6 +196,7 @@ class ProjectInput {
     if (Array.isArray(userInput)) {
       const [title, desc, people] = userInput;
       console.log(title, desc, people);
+      projectState.addProject(title, desc, people);
       this.clearInputs();
     }
   }
@@ -152,6 +210,7 @@ class ProjectInput {
   }
 }
 
+// ProjectItem Class (item class for projects )
 const prjInput = new ProjectInput();
 const activePrjList = new ProjectList('active');
 const finishedPrjList = new ProjectList('finished');
